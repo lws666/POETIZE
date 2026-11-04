@@ -5,7 +5,14 @@
     <link>https://www.lwsnb.eu.cc</link>
     <description>记录代码折腾与生活随笔</description>
     <language>zh-CN</language>
-    <lastBuildDate>Wed, 04 Nov 2026 09:19:20 GMT</lastBuildDate>
+    <lastBuildDate>Wed, 04 Nov 2026 11:59:55 GMT</lastBuildDate>
+    <item>
+      <title>推翻重来：从官方源码接管 POETIZE，自建 Worker 后端</title>
+      <link>https://www.lwsnb.eu.cc/article/from-official-source-to-self-hosted-backend</link>
+      <guid isPermaLink="true">https://www.lwsnb.eu.cc/article/from-official-source-to-self-hosted-backend</guid>
+      <description>上一次用 SvelteKit 复刻 poetize 失败后，这次换了思路：直接部署官方 Vue2 源码，在 Worker 侧写一层适配器把 D1 数据映射成 Java 后端的响应格式。记录 30+ 个接口的逆向、7 个导致白屏的坑、以及把 CI/CD 跑通的全过程。</description>
+      <pubDate>Wed, 04 Nov 2026 00:00:00 GMT</pubDate>
+    </item>
     <item>
       <title>AgentDock + GPT 干活实录：好用，但网页模型是真的区</title>
       <link>https://www.lwsnb.eu.cc/article/agentdock-gpt-workflow</link>
