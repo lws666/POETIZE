@@ -1,0 +1,37 @@
+# ============================================================================
+# lwsnb API v2 —— 重写版
+#
+# 与旧 worker/src 使用**相同的 D1 库与域名**，因此可以原地替换部署：
+#   npx wrangler deploy
+# 回滚只需把 main 指回 ./worker/src/index.ts
+# ============================================================================
+
+name = "blog-worker"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "api.lwsnb.dpdns.org", custom_domain = true },
+  { pattern = "api.lwsnb.eu.cc", custom_domain = true },
+  { pattern = "img.lwsnb.eu.cc", custom_domain = true },
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blog"
+database_id = "<YOUR_D1_DATABASE_ID>"
+
+[vars]
+B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
+B2_REGION = "us-east-005"
+B2_BUCKET = "Valaxy"
+B2_PUBLIC_URL = "https://img.lwsnb.eu.cc"
+SESSION_TTL_HOURS = "168"
+ALLOWED_ORIGINS = "https://www.lwsnb.eu.cc,https://lwsnb-poetize.pages.dev,https://lwsnb-sveltekit.pages.dev,https://poetize-official.pages.dev"
+
+# 密钥沿用旧 worker 的同名 secret（线上已存在，无需重新注入）：
+#   B2_ACCESS_KEY_ID
+#   B2_SECRET_ACCESS_KEY
+# 若需更新：npx wrangler secret put B2_ACCESS_KEY_ID

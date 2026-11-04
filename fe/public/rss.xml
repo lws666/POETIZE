@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>谢谢の博客</title>
+    <link>https://www.lwsnb.eu.cc</link>
+    <description>记录代码折腾与生活随笔</description>
+    <language>zh-CN</language>
+    <lastBuildDate>Wed, 04 Nov 2026 09:19:20 GMT</lastBuildDate>
+    <item>
+      <title>AgentDock + GPT 干活实录：好用，但网页模型是真的区</title>
+      <link>https://www.lwsnb.eu.cc/article/agentdock-gpt-workflow</link>
+      <guid isPermaLink="true">https://www.lwsnb.eu.cc/article/agentdock-gpt-workflow</guid>
+      <description>用 AgentDock 让 GPT 真正动手干活：读代码、改文件、跑命令、部署验证。含 Linux / Docker 完整安装步骤。网页版 GPT 只能算入门水平——不是模型不够聪明，是它只能输出文本，无法执行。</description>
+      <pubDate>Sun, 18 Oct 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>第 N 次重构：用 SvelteKit 重建我的博客</title>
+      <link>https://www.lwsnb.eu.cc/article/sveltekit-rebuild-retrospective</link>
+      <guid isPermaLink="true">https://www.lwsnb.eu.cc/article/sveltekit-rebuild-retrospective</guid>
+      <description>从 Valaxy（Vue）迁移到 SvelteKit，加一层 Butterfly 主题与全套内建 SEO：逆向 acofork 与 Butterfly 的真实实现、修掉 soft 404 与目录滑块、评论换 Twikoo、后台重写。这篇复盘整个过程的得与失。</description>
+      <pubDate>Sat, 17 Oct 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>折腾代码，也记录生活</title>
+      <link>https://www.lwsnb.eu.cc/article/2026-07-26-</link>
+      <guid isPermaLink="true">https://www.lwsnb.eu.cc/article/2026-07-26-</guid>
+      <description>这里记录我的编程学习、网站搭建、前端开发以及各种技术折腾经历。</description>
+      <pubDate>Sun, 26 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>我的第一篇动态文章</title>
+      <link>https://www.lwsnb.eu.cc/article/first-post</link>
+      <guid isPermaLink="true">https://www.lwsnb.eu.cc/article/first-post</guid>
+      <description>---
+title: &quot;我的第一篇动态文章&quot;
+date: 2026-07-19
+categories:
+  - &quot;技术&quot;
+tags:
+  - &quot;技术&quot;
+  - &quot;博客&quot;
+cover: &quot;/covers/cover-1.jpg&quot;
+---
+
+
+# 第一篇动态文章
+
+这是一篇通过 Worker API 发布的动态文章。
+
+&gt; 内容实时生效，无需 rebuild。</description>
+      <pubDate>Sun, 19 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

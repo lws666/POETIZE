@@ -1,0 +1,253 @@
+import { Hono } from 'hono'
+import { getCookie, setCookie } from 'hono/cookie'
+import type { Env, UserRow } from '../lib/types'
+import { findUserByName } from '../lib/auth'
+import { hashPassword, randomToken, sha256, verifyPassword, nowIso } from '../lib/crypto'
+import { legacyOk, legacyErr } from './response'
+import { toUserVO, roleOf, randomAvatar } from '../lib/userModel'
+
+/**
+ * 官方 /user/* 适配 —— 与 poetize-server 的 UserServiceImpl 行为对齐。
+ *
+ * 兼容三处官方细节：
+ *   1. 登录字段 account（不是 username）
+ *   2. 密码 AES-128-ECB/PKCS7，key = "sarasarasarasara"
+ *      Base64 中 '/'→'_'，'+'→'-'
+ *   3. 请求体 form-urlencoded（官方 $http.post 第四参 json=false）
+ */
+
+const AES_KEY = 'sarasarasarasara'
+const SESSION_TTL_H = 24 * 7
+
+export const user = new Hono<{ Bindings: Env }>()
+
+/* ── AES-ECB 解密 ─────────────────────────────────────────── */
+async function aesEcbDecrypt(b64Url: string): Promise<string | null> {
+  try {
+    const b64 = b64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const raw = atob(b64)
+    const data = new Uint8Array(raw.length)
+    for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i)
+
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(AES_KEY), { name: 'AES-CBC' }, false, ['decrypt']
+    )
+
+    // WebCrypto 无 ECB：逐 16 字节块用零 IV 做 CBC，等价于 ECB
+    const out: Uint8Array[] = []
+    const zeroIv = new Uint8Array(16)
+    for (let off = 0; off < data.length; off += 16) {
+      const dec = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: zeroIv }, key, data.slice(off, off + 16))
+      out.push(new Uint8Array(dec))
+    }
+    const merged = new Uint8Array(out.reduce((n, b) => n + b.length, 0))
+    let p = 0
+    for (const b of out) { merged.set(b, p); p += b.length }
+
+    const pad = merged[merged.length - 1]
+    const end = pad > 0 && pad <= 16 ? merged.length - pad : merged.length
+    return new TextDecoder().decode(merged.slice(0, end))
+  } catch {
+    return null
+  }
+}
+
+/** 同时支持 form-urlencoded 与 JSON */
+async function readBody(c: { req: { header: (k: string) => string | undefined; parseBody: () => Promise<Record<string, unknown>>; json: <T>() => Promise<T> } }): Promise<Record<string, string>> {
+  const ctype = c.req.header('Content-Type') || ''
+  if (ctype.includes('application/x-www-form-urlencoded') || ctype.includes('multipart/form-data')) {
+    const form = await c.req.parseBody().catch(() => ({} as Record<string, unknown>))
+    return Object.fromEntries(Object.entries(form as Record<string, unknown>).map(([k, v]) => [k, String(v)]))
+  }
+  const j = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
+  return Object.fromEntries(Object.entries(j).map(([k, v]) => [k, String(v ?? '')]))
+}
+
+/* ── 限流 ─────────────────────────────────────────────────── */
+const attempts = new Map<string, { n: number; reset: number }>()
+function allowed(ip: string, max = 10, win = 60_000): boolean {
+  const now = Date.now()
+  const cur = attempts.get(ip)
+  if (!cur || now > cur.reset) { attempts.set(ip, { n: 1, reset: now + win }); return true }
+  cur.n++
+  return cur.n <= max
+}
+
+/* ── 建会话 ───────────────────────────────────────────────── */
+async function createSession(db: D1Database, userId: number) {
+  const sid = randomToken('sess')
+  const expires = new Date(Date.now() + SESSION_TTL_H * 3600_000).toISOString()
+  await db.batch([
+    db.prepare(`INSERT INTO sessions (token_hash,user_id,created_at,expires_at) VALUES (?1,?2,?3,?4)`)
+      .bind(await sha256(sid), userId, nowIso(), expires),
+    db.prepare(`UPDATE users SET last_login_at=?1 WHERE id=?2`).bind(nowIso(), userId),
+    db.prepare(`DELETE FROM sessions WHERE expires_at < ?1`).bind(nowIso())
+  ])
+  return { sid, expires }
+}
+
+/* ── POST /user/login ─────────────────────────────────────── */
+user.post('/login', async (c) => {
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown'
+  if (!allowed(ip)) return legacyErr('尝试过于频繁，请稍后再试', 429)
+
+  const b = await readBody(c)
+  const account = (b.account || b.username || '').trim()
+  const password = b.password || ''
+  if (!account || !password) return legacyErr('请输入账号或密码', 400)
+
+  const plain = (await aesEcbDecrypt(password)) ?? password
+
+  // 支持用户名 / 邮箱 / 手机号登录
+  const u = await c.env.DB
+    .prepare(`SELECT * FROM users WHERE username=?1 OR (email<>'' AND email=?1) OR (phone_number<>'' AND phone_number=?1) LIMIT 1`)
+    .bind(account)
+    .first<UserRow>()
+
+  const dummy = 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  const passOk = await verifyPassword(plain, u?.password_hash || dummy)
+
+  if (!u || !passOk) return legacyErr('账号或密码错误', 400)
+  if (u.disabled || u.user_status === 0) return legacyErr('账号已被禁用', 403)
+
+  const { sid } = await createSession(c.env.DB, u.id)
+  setCookie(c, 'sid', sid, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: SESSION_TTL_H * 3600 })
+
+  return legacyOk(toUserVO(u, sid))
+})
+
+/* ── GET /user/logout ─────────────────────────────────────── */
+user.get('/logout', async (c) => {
+  const sid = getCookie(c, 'sid')
+  if (sid) await c.env.DB.prepare(`DELETE FROM sessions WHERE token_hash=?1`).bind(await sha256(sid)).run()
+  return legacyOk({})
+})
+
+/* ── POST /user/regist ────────────────────────────────────── */
+user.post('/regist', async (c) => {
+  const b = await readBody(c)
+  const username = (b.username || '').trim()
+  const password = b.password || ''
+  const email = (b.email || '').trim()
+  const phone = (b.phoneNumber || '').trim()
+
+  // 官方校验：用户名不能是 11 位纯数字（避免与手机号混淆）、不能含 @
+  if (!username) return legacyErr('请输入用户名', 400)
+  if (/^\d{11}$/.test(username)) return legacyErr('用户名不能为11位数字', 400)
+  if (username.includes('@')) return legacyErr('用户名不能包含@', 400)
+  if (!/^[\w\u4e00-\u9fa5-]{2,20}$/.test(username)) return legacyErr('用户名 2-20 位', 400)
+  if (!password) return legacyErr('请输入密码', 400)
+
+  const plain = (await aesEcbDecrypt(password)) ?? password
+  if (plain.length < 6) return legacyErr('密码至少 6 位', 400)
+
+  const dup = await c.env.DB.prepare(`SELECT id FROM users WHERE username=?1`).bind(username).first()
+  if (dup) return legacyErr('用户名重复', 409)
+  if (email) {
+    const e = await c.env.DB.prepare(`SELECT id FROM users WHERE email=?1 AND email<>''`).bind(email).first()
+    if (e) return legacyErr('邮箱重复', 409)
+  }
+  if (phone) {
+    const p = await c.env.DB.prepare(`SELECT id FROM users WHERE phone_number=?1 AND phone_number<>''`).bind(phone).first()
+    if (p) return legacyErr('手机号重复', 409)
+  }
+
+  // 官方默认：user_type=2（普通用户）、user_lv=1、随机头像
+  const res = await c.env.DB
+    .prepare(
+      `INSERT INTO users (username,password_hash,role,user_type,user_lv,email,phone_number,avatar,created_at,user_status)
+       VALUES (?1,?2,'read',2,1,?3,?4,?5,?6,1)`
+    )
+    .bind(username, await hashPassword(plain), email, phone, randomAvatar(), nowIso())
+    .run()
+
+  const id = Number(res.meta.last_row_id)
+  const u = await c.env.DB.prepare(`SELECT * FROM users WHERE id=?1`).bind(id).first<UserRow>()
+  if (!u) return legacyErr('注册失败', 500)
+
+  const { sid } = await createSession(c.env.DB, id)
+  setCookie(c, 'sid', sid, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: SESSION_TTL_H * 3600 })
+
+  return legacyOk(toUserVO(u, sid))
+})
+
+/* ── 个人资料 ─────────────────────────────────────────────── */
+
+/** GET /user/getUserInfo —— 按 id 查（公开，只暴露安全字段） */
+user.get('/getUserInfo', async (c) => {
+  const id = Number(c.req.query('id'))
+  if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+  const u = await c.env.DB.prepare(`SELECT * FROM users WHERE id=?1`).bind(id).first<UserRow>()
+  if (!u) return legacyErr('用户不存在', 404)
+
+  // 公开信息：不含 email / phone
+  return legacyOk({
+    id: u.id,
+    username: u.username,
+    avatar: u.avatar,
+    gender: u.gender,
+    introduction: u.introduction,
+    userLv: u.user_lv,
+    createTime: u.created_at,
+    isBoss: u.user_type === 0
+  })
+})
+
+/** POST /user/updateUserInfo —— 改自己的资料 */
+user.post('/updateUserInfo', async (c) => {
+  const me = await currentUser(c)
+  if (!me) return legacyErr('请先登录', 401)
+
+  const b = await readBody(c)
+  const sets: string[] = []
+  const vals: unknown[] = []
+
+  if (b.avatar !== undefined) { sets.push(`avatar=?${vals.length + 1}`); vals.push(b.avatar) }
+  if (b.introduction !== undefined) { sets.push(`introduction=?${vals.length + 1}`); vals.push(b.introduction) }
+  if (b.gender !== undefined) { sets.push(`gender=?${vals.length + 1}`); vals.push(Number(b.gender) || 0) }
+  if (b.username !== undefined && b.username.trim()) {
+    const name = b.username.trim()
+    const dup = await c.env.DB.prepare(`SELECT id FROM users WHERE username=?1 AND id<>?2`).bind(name, me.id).first()
+    if (dup) return legacyErr('用户名重复', 409)
+    sets.push(`username=?${vals.length + 1}`); vals.push(name)
+  }
+
+  if (!sets.length) return legacyErr('没有要更新的字段', 400)
+
+  await c.env.DB.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id=?${vals.length + 1}`)
+    .bind(...vals, me.id).run()
+
+  const u = await c.env.DB.prepare(`SELECT * FROM users WHERE id=?1`).bind(me.id).first<UserRow>()
+  return legacyOk(toUserVO(u!))
+})
+
+/** 取当前登录用户（支持 Bearer 与 Cookie 两种凭证） */
+async function currentUser(c: {
+  req: { header: (k: string) => string | undefined }
+  env: Env
+}): Promise<UserRow | null> {
+  // 兼容 Bearer 前缀与裸 token（官方 Vue 前端不带前缀）
+  const auth = (c.req.header('Authorization') || '').trim()
+  let token = ''
+  if (auth && auth !== 'null' && auth !== 'undefined') {
+    token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : auth
+  }
+  if (!token) {
+    const cookie = c.req.header('Cookie') || ''
+    token = cookie.match(/sid=([^;]+)/)?.[1] || ''
+  }
+  if (!token || token === 'null') return null
+
+  return (
+    (await c.env.DB
+      .prepare(
+        `SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
+          WHERE s.token_hash=?1 AND s.expires_at > ?2`
+      )
+      .bind(await sha256(token), nowIso())
+      .first<UserRow>()) ?? null
+  )
+}
+
+/** 其余 user/* 占位 */
+user.all('/*', (c) => legacyOk({}))
