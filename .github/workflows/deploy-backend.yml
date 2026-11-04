@@ -34,6 +34,19 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # wrangler.toml 里 database_id 是占位符 <YOUR_D1_DATABASE_ID>，
+      # 真实 id 通过 Secret 注入，避免公开仓库暴露内部标识
+      - name: Inject D1 database id
+        env:
+          D1_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: |
+          if [ -z "$D1_ID" ]; then
+            echo "::error::缺少 Secret D1_DATABASE_ID"
+            exit 1
+          fi
+          sed -i "s|<YOUR_D1_DATABASE_ID>|$D1_ID|g" wrangler.toml
+          echo "database_id 已注入"
+
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
