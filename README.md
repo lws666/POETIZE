@@ -10,6 +10,24 @@
 | 博客前端 | https://www.lwsnb.eu.cc |
 | 后端 API | https://api.lwsnb.eu.cc |
 
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/API.md](docs/API.md) | 接口文档（两层 API、字段约定、易错点） |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 部署指南（自动部署、手动部署、回滚、排错） |
+
+## 自动部署
+
+push 到 `main` 自动触发：
+
+| 改动 | 工作流 |
+|---|---|
+| `backend/**` | 类型检查 → 部署 Worker |
+| `fe/**` | 构建 → 部署 Pages |
+
+需在仓库 Settings → Secrets 配置 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。
+
 ## 技术栈
 
 | 层 | 技术 |
