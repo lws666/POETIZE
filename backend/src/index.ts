@@ -18,6 +18,7 @@ import siteConfig from './routes/siteConfig'
 import postAccess from './routes/postAccess'
 import { seo } from './routes/seo'
 import mail from './routes/mail'
+import im from './routes/im'
 
 const app = new Hono<AuthCtx & { Bindings: Env }>()
 
@@ -101,6 +102,9 @@ app.route('/api/post-access', postAccess)
 /* 邮箱验证码 */
 app.route('/api/mail', mail)
 
+/* 聊天室 */
+app.route('/api/im', im)
+
 /* SEO：sitemap / robots / rss（直接挂在根路径，前端转发过来） */
 app.route('/', seo)
 
@@ -113,3 +117,6 @@ app.onError((err, c) => {
 })
 
 export default app
+
+/* Durable Object 必须从入口导出 */
+export { ChatRoom } from './im/room'

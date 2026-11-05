@@ -9,6 +9,11 @@ VueRouter.prototype.push = function push(location) {
 Vue.use(VueRouter)
 
 const routes = [
+    {
+      path: "/im",
+      name: "im",
+      component: () => import('../components/im')
+    },
   {
     path: '/',
     component: () => import('../components/home'),

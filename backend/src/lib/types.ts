@@ -9,6 +9,8 @@ export interface Env {
   B2_ACCESS_KEY_ID: string
   /** Brevo 邮件服务 */
   BREVO_API_KEY: string
+  /** 聊天室 Durable Object */
+  CHAT_ROOM: DurableObjectNamespace
   MAIL_FROM: string
   MAIL_FROM_NAME: string
   B2_SECRET_ACCESS_KEY: string

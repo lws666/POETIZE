@@ -19,8 +19,8 @@
             <input v-model="username" type="text" maxlength="30" placeholder="用户名">
             <input v-model="password" type="password" maxlength="30" placeholder="密码">
             <input v-model="email" type="email" placeholder="邮箱">
-            <input v-model="code" type="text" placeholder="验证码" disabled>
-            <a style="margin: 0" href="#" @click="changeDialog('邮箱验证码')">获取验证码</a>
+            <input v-model="code" type="text" maxlength="6" placeholder="6 位验证码">
+            <a style="margin: 0" href="#" @click.prevent="sendRegistCode()">{{ registerCodeText }}</a>
             <button @click="regist()">注册</button>
           </div>
         </div>
@@ -222,6 +222,8 @@
         avatar: "",
         showDialog: false,
         code: "",
+        registerCodeText: "获取验证码",
+        registerCodeTimer: null,
         dialogTitle: "",
         codeString: "验证码",
         passwordFlag: null,
@@ -283,7 +285,7 @@
           return;
         }
 
-        if (this.dialogTitle === "邮箱验证码" && this.$common.isEmpty(this.email)) {
+        if (this.$common.isEmpty(this.email)) {
           this.$message({
             message: "请输入邮箱！",
             type: "error"
@@ -313,8 +315,14 @@
           password: this.$common.encrypt(this.password.trim())
         };
 
-        if (this.dialogTitle === "邮箱验证码") {
-          user.email = this.email;
+        /**
+         * 注册页的 dialogTitle 是空字符串，
+         * 原来只在弹窗模式（"邮箱验证码"）才传 email，
+         * 导致注册时后端拿不到邮箱、验证码无法校验。
+         * 这里改成：只要填了邮箱就带上。
+         */
+        if (!this.$common.isEmpty(this.email)) {
+          user.email = this.email.trim();
         }
 
         this.$http.post(this.$constant.baseURL + "/user/regist", user)
@@ -325,8 +333,8 @@
               this.username = "";
               this.password = "";
               this.$router.push({path: '/'});
-              let userToken = this.$common.encrypt(localStorage.getItem("userToken"));
-              window.open(this.$constant.imBaseURL + "?userToken=" + userToken);
+              /* 注册成功后不再自动打开聊天窗口（原来的 window.open 会弹 localhost） */
+              this.$message({ message: "注册成功，欢迎加入！", type: "success" });
             }
           })
           .catch((error) => {
@@ -564,6 +572,52 @@
             });
         }
       },
+      /** 注册页就地发送验证码（不跳弹窗） */
+      sendRegistCode() {
+        if (this.registerCodeText !== "获取验证码") {
+          return;
+        }
+        const email = (this.email || "").trim();
+        if (!email) {
+          this.$message({ message: "请先填写邮箱！", type: "error" });
+          return;
+        }
+        if (!/^\w+@[a-zA-Z0-9]{2,10}(?:\.[a-z]{2,4}){1,3}$/.test(email)) {
+          this.$message({ message: "邮箱格式有误！", type: "error" });
+          return;
+        }
+
+        // 与弹窗版一致：走 place 参数
+        this.$http.get(this.$constant.baseURL + "/user/getCodeForForgetPassword", {
+          flag: 2,
+          place: email
+        })
+          .then(() => {
+            this.$message({ message: "验证码已发送，请查收邮件！", type: "success" });
+            this.startRegisterCodeCountdown();
+          })
+          .catch((error) => {
+            this.$message({ message: error.message || "发送失败", type: "error" });
+          });
+      },
+
+      /** 60 秒倒计时 */
+      startRegisterCodeCountdown() {
+        let n = 60;
+        this.registerCodeText = n + "s";
+        if (this.registerCodeTimer) clearInterval(this.registerCodeTimer);
+        this.registerCodeTimer = setInterval(() => {
+          n--;
+          if (n <= 0) {
+            clearInterval(this.registerCodeTimer);
+            this.registerCodeTimer = null;
+            this.registerCodeText = "获取验证码";
+          } else {
+            this.registerCodeText = n + "s";
+          }
+        }, 1000);
+      },
+
       getCode() {
         if (this.codeString === "验证码") {
           // 获取验证码

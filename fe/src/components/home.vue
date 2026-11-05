@@ -397,8 +397,8 @@
             type: "error"
           });
         } else {
-          let userToken = this.$common.encrypt(localStorage.getItem("userToken"));
-          window.open(this.$constant.imBaseURL + "?userToken=" + userToken + "&defaultStoreType=" + localStorage.getItem("defaultStoreType"));
+          /* 改为站内路由跳转，不再 window.open 外部地址 */
+          this.$router.push({ path: "/im" });
         }
       },
 
