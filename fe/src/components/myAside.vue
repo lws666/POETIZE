@@ -120,6 +120,9 @@
         </div>
       </div>
 
+      <!-- 标签云（3D） -->
+      <tagCloud v-if="!$common.mobile() && labelList.length > 0" :labels="labelList" />
+
       <!-- 赞赏 -->
       <div class="shadow-box-mini background-opacity wow admire-box"
            v-if="!$common.isEmpty(admires) && false">
@@ -170,7 +173,8 @@
 
   export default {
     components: {
-      vueSeamlessScroll
+      vueSeamlessScroll,
+      tagCloud: () => import('./common/tagCloud')
     },
     data() {
       return {
@@ -181,6 +185,7 @@
         },
         recommendArticles: [],
         admires: [],
+        labelList: [],
         showAdmireDialog: false,
         articleSearch: ""
       }
@@ -195,6 +200,7 @@
     },
     created() {
       this.getRecommendArticles();
+      this.getLabels();
     },
     methods: {
       selectSort(sort) {
@@ -228,6 +234,19 @@
             });
           });
       },
+      /** 取标签列表（复用官方的 listSortAndLabel 接口） */
+      getLabels() {
+        this.$http.get(this.$constant.baseURL + "/webInfo/listSortAndLabel")
+          .then((res) => {
+            const list = res.data && res.data.labels ? res.data.labels : [];
+            // 过滤空标签，按文章数排序
+            this.labelList = list
+              .filter(l => l && l.labelName && String(l.labelName).trim())
+              .sort((a, b) => (b.countOfLabel || 0) - (a.countOfLabel || 0));
+          })
+          .catch(() => {});
+      },
+
       getRecommendArticles() {
         this.$http.post(this.$constant.baseURL + "/article/listArticle", this.pagination)
           .then((res) => {
