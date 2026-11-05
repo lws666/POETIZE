@@ -30,7 +30,7 @@
                 </svg>
               </i>
             </span>
-            <span class="lable-text">{{ item.text }}</span>
+            <span class="lable-text" :style="{ background: item.color }">{{ item.text }}</span>
           </div>
         </slot>
       </div>
@@ -192,44 +192,48 @@ export default {
 </script>
 
 <style scoped>
+/* 以下规则逐条来自 poetize.cn 的 CSSOM（.label-item[data-v-469000ce] 等） */
+
 .cloud {
   position: relative;
-  margin: 0 auto;
-  overflow: hidden;
 }
 
+/* 官方：transition: 2s linear —— 3D 位置平滑过渡的关键 */
 .cloud-item {
   position: absolute;
-  left: 0;
-  top: 0;
-  cursor: pointer;
-  will-change: transform, opacity;
+  transition: 2s linear;
 }
 
 .label-item {
-  display: flex;
-  align-items: center;
-  height: 27px;
-  box-sizing: border-box;
+  margin: 5px;
+  color: #fff;
   border-radius: 25px;
   overflow: hidden;
-  font-size: 16px;
-  line-height: normal;
-  color: #fff;
-  white-space: nowrap;
-  background: transparent;
+  transition: .3s ease-in-out;
+}
+
+.label-item:hover {
+  box-shadow: 0 0 5px var(--themeBackground);
+  transform: scale(1.2);
 }
 
 .icon-wrap {
-  display: inline-flex;
-  align-items: center;
   padding: 8px 6px 8px 8px;
 }
 
+/**
+ * 实心色块在这里，不在 .label-item 上。
+ * 之前加错层，导致标签是空心描边、文字白字白底看不见。
+ */
 .lable-text {
   padding: 8px 10px 8px 6px;
+  color: #fff;
+  font-size: 16px;
+  line-height: 25px;
+  display: inline;
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
