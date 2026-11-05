@@ -1,12 +1,12 @@
-# POETIZE 博客
+# POETIZE for CF
 
-[![GitHub stars](https://img.shields.io/github/stars/lws666/POETIZE?style=social)](https://github.com/lws666/POETIZE/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/lws666/POETIZE-for-CF?style=social)](https://github.com/lws666/POETIZE-for-CF/stargazers)
 [![Frontend](https://img.shields.io/badge/Frontend-Vue%202.6-42b883?logo=vue.js)]()
 [![Backend](https://img.shields.io/badge/Backend-Cloudflare%20Workers-f38020?logo=cloudflare)]()
 [![Database](https://img.shields.io/badge/Database-D1-f38020?logo=cloudflare)]()
-[![License](https://img.shields.io/badge/License-MIT-green)]()
-[![Last Commit](https://img.shields.io/github/last-commit/lws666/POETIZE?label=Last%20Commit)](https://github.com/lws666/POETIZE/commits)
-[![Repo Size](https://img.shields.io/github/repo-size/lws666/POETIZE?label=Repo%20Size)](https://github.com/lws666/POETIZE)
+[![License](https://img.shields.io/badge/License-AGPL%20v3-blue)](https://www.gnu.org/licenses/agpl-3.0.html)
+[![Last Commit](https://img.shields.io/github/last-commit/lws666/POETIZE-for-CF?label=Last%20Commit)](https://github.com/lws666/POETIZE-for-CF/commits)
+[![Repo Size](https://img.shields.io/github/repo-size/lws666/POETIZE-for-CF?label=Repo%20Size)](https://github.com/lws666/POETIZE-for-CF)
 
 > ⭐ **如果这个项目对你有帮助，点个 Star 支持一下～**
 
@@ -43,7 +43,7 @@
 |---|---|
 | 博客前端 | https://www.lwsnb.eu.cc |
 | 后端 API | https://api.lwsnb.eu.cc |
-| 代码仓库 | https://github.com/lws666/POETIZE |
+| 代码仓库 | https://github.com/lws666/POETIZE-for-CF |
 
 ---
 
@@ -154,7 +154,7 @@ POETIZE/
 ### 通用前置
 
 ```bash
-git clone https://github.com/lws666/POETIZE.git
+git clone https://github.com/lws666/POETIZE-for-CF.git
 cd POETIZE
 ```
 
@@ -407,7 +407,15 @@ CNAME → <project>.pages.dev
 
 ## 📄 License
 
-MIT
+本项目基于 [POETIZE](https://poetize.cn) 二次开发，遵循其原始许可证：
+
+**[GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html)**
+
+> [!WARNING]
+> AGPL-3.0 是**强 copyleft** 许可证。如果你修改本项目并通过网络提供服务
+> （包括部署成网站），必须以相同许可证公开修改后的完整源代码。
+>
+> 这是官方 POETIZE 的要求，不是本项目额外附加的。
 
 ## 🙏 致谢
 
