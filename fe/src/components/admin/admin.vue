@@ -32,7 +32,11 @@
       let sysConfig = this.$store.state.sysConfig;
       if (!this.$common.isEmpty(sysConfig) && !this.$common.isEmpty(sysConfig['webStaticResourcePrefix'])) {
         let webStaticResourcePrefix = sysConfig['webStaticResourcePrefix'];
-        const font = new FontFace("poetize-font", "url(" + webStaticResourcePrefix + "assets/font.woff2)");
+        /* font-display: swap —— 字体加载期间先用系统字体渲染，
+           避免 800KB 字体阻塞首屏文字显示（FOIT）*/
+        const font = new FontFace("poetize-font", "url(" + webStaticResourcePrefix + "assets/font-2.woff2)", {
+          display: "swap"
+        });
         font.load();
         document.fonts.add(font);
       }

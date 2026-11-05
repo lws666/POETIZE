@@ -1,20 +1,29 @@
-# 静态资源长期缓存（文件名带 hash）
+# ── 带 hash 的构建产物：永久缓存 ──
 /css/*
   Cache-Control: public, max-age=31536000, immutable
 /js/*
   Cache-Control: public, max-age=31536000, immutable
 
-# 图片缓存 30 天
+# ── 壁纸：30 天（文件名稳定，内容基本不变）──
 /covers/*
   Cache-Control: public, max-age=2592000
-/assets/*
-  Cache-Control: public, max-age=2592000
 
-# HTML 不缓存，保证更新即时生效
+# ── 字体：30 天。加 immutable 省掉重新验证的往返 ──
+/assets/font-2.woff2
+  Cache-Control: public, max-age=2592000, immutable
+
+# ── 其他 assets（DECOR 图等）：1 天 + 可重新验证 ──
+# 之前是 30 天强缓存，改图后老用户一个月看不到新版本
+/assets/*
+  Cache-Control: public, max-age=86400, must-revalidate
+
+# ── HTML 不缓存 ──
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
+/
+  Cache-Control: public, max-age=0, must-revalidate
 
-# 安全头
+# ── 安全头 ──
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
