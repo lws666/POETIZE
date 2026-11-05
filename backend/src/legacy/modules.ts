@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
 import type { Env, UserRow } from '../lib/types'
 import { legacyOk, legacyErr } from './response'
+import { requireWrite, requireLogin } from './guard'
 import { currentUserLite } from '../lib/auth'
 import { nowIso } from '../lib/crypto'
+import { sanitizeText, sanitizeUrl } from '../lib/sanitize'
 import { b2Client, extOf } from '../lib/b2'
 
 /**
@@ -58,6 +60,8 @@ modules.post('/resource/listResource', async (c) => {
 
 /** POST /resource/saveResource —— 登记已上传的文件 */
 modules.post('/resource/saveResource', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
@@ -75,6 +79,8 @@ modules.post('/resource/saveResource', async (c) => {
 
 /** GET /resource/changeResourceStatus / deleteResource */
 modules.get('/resource/changeResourceStatus', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   await c.env.DB.prepare(`UPDATE poem_resource SET status=1-status WHERE id=?1`).bind(id).run()
@@ -82,6 +88,8 @@ modules.get('/resource/changeResourceStatus', async (c) => {
 })
 
 modules.get('/resource/deleteResource', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   await c.env.DB.prepare(`UPDATE poem_resource SET deleted=1 WHERE id=?1`).bind(id).run()
@@ -174,12 +182,15 @@ modules.post('/weiYan/listWeiYan', async (c) => {
 
 /** POST /weiYan/saveWeiYan */
 modules.post('/weiYan/saveWeiYan', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const b = await c.req.json<{ content?: string; type?: string; isPublic?: boolean }>()
     .catch(() => ({} as { content?: string; type?: string; isPublic?: boolean }))
-  const content = String(b.content || '').trim()
-  if (!content) return legacyErr('内容不能为空', 400)
+  const raw = String(b.content || '').trim()
+  if (!raw) return legacyErr('内容不能为空', 400)
+  const content = sanitizeText(raw)
 
   const res = await c.env.DB
     .prepare(`INSERT INTO poem_weiyan (user_id,like_count,content,is_public,type,source,create_time,deleted)
@@ -195,6 +206,8 @@ modules.post('/weiYan/saveWeiYan', async (c) => {
 
 /** GET /weiYan/deleteWeiYan */
 modules.get('/weiYan/deleteWeiYan', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const id = Number(c.req.query('id'))
@@ -235,11 +248,14 @@ modules.post('/weiYan/listNews', async (c) => {
 })
 
 modules.post('/weiYan/saveNews', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const b = await c.req.json<{ content?: string }>().catch(() => ({} as { content?: string }))
-  const content = String(b.content || '').trim()
-  if (!content) return legacyErr('内容不能为空', 400)
+  const raw = String(b.content || '').trim()
+  if (!raw) return legacyErr('内容不能为空', 400)
+  const content = sanitizeText(raw)
 
   const res = await c.env.DB
     .prepare(`INSERT INTO poem_weiyan (user_id,like_count,content,is_public,type,source,create_time,deleted)
@@ -313,6 +329,8 @@ modules.get('/family/listRandomFamily', async (c) => {
 })
 
 modules.post('/family/saveFamily', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
@@ -328,6 +346,8 @@ modules.post('/family/saveFamily', async (c) => {
 })
 
 modules.get('/family/deleteFamily', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const id = Number(c.req.query('id'))
@@ -337,6 +357,8 @@ modules.get('/family/deleteFamily', async (c) => {
 })
 
 modules.get('/family/changeLoveStatus', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   await c.env.DB.prepare(`UPDATE poem_family SET status=1-status WHERE id=?1`).bind(id).run()
@@ -422,10 +444,13 @@ modules.post('/webInfo/listTreeHole', async (c) => {
 })
 
 modules.post('/webInfo/saveTreeHole', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ message?: string; avatar?: string }>()
     .catch(() => ({} as { message?: string; avatar?: string }))
-  const message = String(b.message || '').trim()
-  if (!message) return legacyErr('内容不能为空', 400)
+  const rawMsg = String(b.message || '').trim()
+  if (!rawMsg) return legacyErr('内容不能为空', 400)
+  const message = sanitizeText(rawMsg)
 
   const res = await c.env.DB
     .prepare(`INSERT INTO poem_treehole (avatar,message,create_time,deleted) VALUES (?1,?2,?3,0)`)
@@ -434,6 +459,8 @@ modules.post('/webInfo/saveTreeHole', async (c) => {
 })
 
 modules.get('/webInfo/deleteTreeHole', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   await c.env.DB.prepare(`UPDATE poem_treehole SET deleted=1 WHERE id=?1`).bind(id).run()

@@ -3,6 +3,7 @@ import type { Env, UserRow } from '../lib/types'
 import { legacyOk, legacyErr } from './response'
 import { currentUserLite } from '../lib/auth'
 import { nowIso } from '../lib/crypto'
+import { sanitizeText } from '../lib/sanitize'
 
 /**
  * 评论 —— 对齐官方 Comment 实体与 comment.vue 的消费结构。
@@ -156,9 +157,15 @@ comment.post('/saveComment', async (c) => {
     parentCommentId?: number; floorCommentId?: number
   }))
 
-  const content = String(b.commentContent || '').trim()
-  if (!content) return legacyErr('评论内容不能为空', 400)
-  if (content.length > 2000) return legacyErr('评论过长（最多 2000 字）', 400)
+  const raw = String(b.commentContent || '').trim()
+  if (!raw) return legacyErr('评论内容不能为空', 400)
+  if (raw.length > 2000) return legacyErr('评论过长（最多 2000 字）', 400)
+
+  /**
+   * 净化 HTML —— 前端用 v-html 渲染评论，
+   * 不转义会导致 <img onerror=alert(1)> 直接执行。
+   */
+  const content = sanitizeText(raw)
 
   const source = Number(b.source) || 0
   const type = String(b.type || 'article')

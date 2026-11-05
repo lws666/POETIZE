@@ -142,8 +142,12 @@ export async function currentUserLite(
   return (
     (await db
       .prepare(
+        /**
+         * 必须检查 u.disabled —— 被封禁的用户不能继续操作。
+         * resolveUser 有检查，这里之前漏了，导致被禁用户仍能发评论/随笔。
+         */
         `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-          WHERE s.token_hash = ?1 AND s.expires_at > ?2`
+          WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND u.disabled = 0`
       )
       .bind(await sha256(token), new Date().toISOString())
       .first<UserRow>()) ?? null

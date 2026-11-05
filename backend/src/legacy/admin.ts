@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Env, PostRow, UserRow } from '../lib/types'
 import { legacyOk, legacyErr } from './response'
+import { requireWrite, requireBoss } from './guard'
 import { readConfig, writeConfig } from '../lib/siteConfig'
 import { deriveSorts, deriveLabels, toLegacyArticle } from './mapper'
 import { stripFrontmatter, parseArr } from '../lib/posts'
@@ -24,6 +25,8 @@ export const admin = new Hono<{ Bindings: Env }>()
 
 /** POST /article/saveArticle */
 admin.post('/article/saveArticle', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const title = String(b.articleTitle || '').trim()
   if (!title) return legacyErr('标题不能为空', 400)
@@ -68,6 +71,8 @@ admin.post('/article/saveArticle', async (c) => {
 
 /** POST /article/updateArticle */
 admin.post('/article/updateArticle', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const id = Number(b.id)
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
@@ -108,6 +113,9 @@ admin.post('/article/updateArticle', async (c) => {
  * 同时保留 POST 兼容脚本调用。
  */
 const deleteArticle = async (c: any) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
   let id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) {
     const b = await c.req.json().catch(() => ({}))
@@ -196,6 +204,8 @@ admin.post('/admin/article/user/list', async (c) => listAdminPosts(c))
  * 也兼容 ?articleId=N&viewType=public（改访问类型）
  */
 admin.get('/admin/article/changeArticleStatus', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('articleId') ?? c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('articleId 非法', 400)
 
@@ -238,6 +248,8 @@ admin.get('/webInfo/listSortAndLabel', async (c) => {
 })
 
 admin.post('/webInfo/saveSort', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ sortName?: string; sortDescription?: string }>().catch(() => ({} as { sortName?: string; sortDescription?: string }))
   const name = String(b.sortName || '').trim()
   if (!name) return legacyErr('分类名不能为空', 400)
@@ -246,6 +258,8 @@ admin.post('/webInfo/saveSort', async (c) => {
 })
 
 admin.post('/webInfo/updateSort', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ sortName?: string; newName?: string }>().catch(() => ({} as Record<string, unknown>))
   const oldName = String(b.sortName || '').trim()
   const newName = String(b.newName || b.sortName || '').trim()
@@ -264,6 +278,8 @@ admin.post('/webInfo/updateSort', async (c) => {
 })
 
 admin.post('/webInfo/deleteSort', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ sortName?: string }>().catch(() => ({} as Record<string, unknown>))
   const name = String(b.sortName || '').trim()
   if (!name) return legacyErr('分类名不能为空', 400)
@@ -280,12 +296,16 @@ admin.post('/webInfo/deleteSort', async (c) => {
 })
 
 admin.post('/webInfo/saveLabel', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ labelName?: string }>().catch(() => ({} as Record<string, unknown>))
   return legacyOk({ labelName: String(b.labelName || ''), note: '标签由文章自动聚合' })
 })
 
 /** 更新/删除标签：批量改 posts.tags */
 admin.post('/webInfo/updateLabel', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ labelName?: string; newName?: string }>().catch(() => ({} as Record<string, unknown>))
   const oldName = String(b.labelName || '').trim()
   const newName = String(b.newName || b.labelName || '').trim()
@@ -303,6 +323,8 @@ admin.post('/webInfo/updateLabel', async (c) => {
 })
 
 admin.post('/webInfo/deleteLabel', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ labelName?: string }>().catch(() => ({} as Record<string, unknown>))
   const name = String(b.labelName || '').trim()
   if (!name) return legacyErr('标签名不能为空', 400)
@@ -361,6 +383,8 @@ admin.post('/resource/listResource', async (c) => {
 
 /** POST /resource/deleteResource —— 按 id 或 path 删除 */
 admin.post('/resource/deleteResource', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<{ id?: number; path?: string }>()
     .catch(() => ({} as { id?: number; path?: string }))
   if (b.id !== undefined) {
@@ -456,7 +480,10 @@ async function commentList(c: { req: { json: <T>() => Promise<T> }; env: Env }) 
 admin.get('/admin/comment/boss/deleteComment', async (c) => delComment(c))
 admin.get('/admin/comment/user/deleteComment', async (c) => delComment(c))
 
-async function delComment(c: { req: { query: (k: string) => string | undefined }; env: Env }) {
+async function delComment(c: any) {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   // 软删该评论及其所有回复
@@ -498,6 +525,8 @@ admin.post('/webInfo/listResourcePath', async (c) => {
 
 /** POST /webInfo/saveResourcePath */
 admin.post('/webInfo/saveResourcePath', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const title = String(b.title || '').trim()
   if (!title) return legacyErr('标题不能为空', 400)
@@ -513,6 +542,8 @@ admin.post('/webInfo/saveResourcePath', async (c) => {
 
 /** POST /webInfo/updateResourcePath */
 admin.post('/webInfo/updateResourcePath', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const id = Number(b.id)
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
@@ -536,6 +567,8 @@ admin.post('/webInfo/updateResourcePath', async (c) => {
 
 /** GET /webInfo/deleteResourcePath */
 admin.get('/webInfo/deleteResourcePath', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   await c.env.DB.prepare(`UPDATE poem_resource_path SET deleted=1 WHERE id=?1`).bind(id).run()
@@ -596,6 +629,8 @@ admin.post('/family/listFamily', async (c) => {
 
 /** POST /webInfo/updateWebInfo —— webEdit.vue 保存站点信息 */
 admin.post('/webInfo/updateWebInfo', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const patch: Record<string, string> = {}
 
@@ -716,6 +751,8 @@ admin.get('/sysConfig/listConfig', async (c) => {
 })
 
 admin.post('/sysConfig/saveOrUpdateConfig', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
   const b = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   // 前端表单有 configKey（程序键名）与 configName（显示名），优先用 configKey
   const k = String(b.configKey || b.configName || '').trim()
@@ -729,6 +766,9 @@ admin.post('/sysConfig/saveOrUpdateConfig', async (c) => {
  * configList.vue 用 GET（传 ?id=），同时兼容 POST 的 configKey。
  */
 const deleteConfig = async (c: any) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
   let k = String(c.req.query('configKey') || '').trim()
 
   // 前端只传 id，需要用 id 反查 key
@@ -756,6 +796,10 @@ admin.post('/sysConfig/deleteConfig', deleteConfig)
 
 /** POST /admin/user/list —— userList.vue 实际调用 */
 admin.post('/admin/user/list', async (c) => {
+  /* 用户列表含邮箱等敏感信息，需要站长权限 */
+  const denied = await requireBoss(c)
+  if (denied) return denied
+
   const b = await c.req.json<{ current?: number; size?: number; userType?: number }>()
     .catch(() => ({} as { current?: number; size?: number; userType?: number }))
   const current = Math.max(1, Number(b.current) || 1)
@@ -783,6 +827,8 @@ admin.post('/admin/user/list', async (c) => {
 
 /** GET /admin/user/changeUserType —— 改用户类型 */
 admin.get('/admin/user/changeUserType', async (c) => {
+  const denied = await requireBoss(c)
+  if (denied) return denied
   const id = Number(c.req.query('userId') ?? c.req.query('id'))
   const type = Number(c.req.query('userType'))
   if (!Number.isFinite(id) || ![0, 1, 2].includes(type)) return legacyErr('参数非法', 400)
@@ -796,10 +842,17 @@ admin.get('/admin/user/changeUserType', async (c) => {
 })
 
 /** GET /admin/user/changeUserAdmire —— 赞赏设置（本项目占位） */
-admin.get('/admin/user/changeUserAdmire', async (c) => legacyOk({ updated: true }))
+admin.get('/admin/user/changeUserAdmire', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+  return legacyOk({ updated: true })
+})
 
 /** GET /user/listUser（保留兼容） */
 admin.get('/user/listUser', async (c) => {
+  const denied = await requireBoss(c)
+  if (denied) return denied
+
   const { results } = await c.env.DB
     .prepare(`SELECT id,username,email,gender,avatar,user_type,user_lv,user_status,created_at FROM users ORDER BY id`)
     .all()
@@ -815,6 +868,8 @@ admin.get('/user/listUser', async (c) => {
 })
 
 admin.get('/user/changeUserStatus', async (c) => {
+  const denied = await requireBoss(c)
+  if (denied) return denied
   const id = Number(c.req.query('userId') ?? c.req.query('id'))
   const status = c.req.query('userStatus')
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
@@ -824,6 +879,8 @@ admin.get('/user/changeUserStatus', async (c) => {
 })
 
 admin.get('/user/changeUserLv', async (c) => {
+  const denied = await requireBoss(c)
+  if (denied) return denied
   const id = Number(c.req.query('userId') ?? c.req.query('id'))
   const lv = Number(c.req.query('userLv'))
   if (!Number.isFinite(id) || !(lv >= 1 && lv <= 6)) return legacyErr('参数非法', 400)
@@ -832,6 +889,8 @@ admin.get('/user/changeUserLv', async (c) => {
 })
 
 admin.get('/user/deleteUser', async (c) => {
+  const denied = await requireBoss(c)
+  if (denied) return denied
   const id = Number(c.req.query('userId') ?? c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
   const u = await c.env.DB.prepare(`SELECT user_type FROM users WHERE id=?1`).bind(id).first<{ user_type: number }>()

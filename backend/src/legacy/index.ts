@@ -98,5 +98,26 @@ legacy.route('/comment', comment)
 /** 用户接口：登录/注册/登出（官方前端用 account + AES 加密密码） */
 legacy.route('/user', user)
 
-/** 其余未实现接口统一返回空，避免前端崩溃 */
-legacy.all('/*', (c) => ok([]))
+/**
+ * 兜底：其余未实现接口统一返回空，避免前端崩溃。
+ *
+ * 但 `/admin/*` 与 `/user/change*` 这类管理路径必须先鉴权 ——
+ * 否则未登录访问 /admin/user/changeUserLv 会命中这里，
+ * 拿到 200 + 空数组，看起来"调用成功"，实际是鉴权缺失的假象。
+ */
+legacy.all('/*', async (c) => {
+  const path = c.req.path
+  const needsAuth =
+    path.includes('/admin/') ||
+    /\/user\/(change|delete|list)/.test(path) ||
+    /\/(save|update|delete)[A-Z]/.test(path)
+
+  if (needsAuth) {
+    const { guardUser } = await import('./guard')
+    const u = await guardUser(c)
+    if (!u) return legacyErr('请先登录', 401)
+    if (u.user_type > 1) return legacyErr('需要管理员权限', 403)
+  }
+
+  return ok([])
+})

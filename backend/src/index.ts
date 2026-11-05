@@ -54,10 +54,33 @@ app.use('/api/*', async (c, next) => {
    */
   const isAllowed =
     allow.includes(origin) ||
-    /^https:\/\/[a-z0-9-]+\.(poetize-official|lwsnb-poetize|lwsnb-sveltekit)\.pages\.dev$/.test(origin)
+    /^https:\/\/[a-z0-9-]+\.(poetize-official|lwsnb-poetize|lwsnb-sveltekit)\.pages\.dev$/.test(origin) ||
+    /**
+     * 本地构建用：预渲染时 Puppeteer 通过 http://127.0.0.1:PORT 访问页面，
+     * 页面请求 API 的 Origin 就是 localhost。
+     * 不限死端口号，因为插件会随机选可用端口。
+     */
+    /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)
+
+  /**
+   * 不放行时**不下发** Access-Control-Allow-Origin，而不是回落白名单首项。
+   *
+   * 回落会让恶意站点拿到一个"看似合法"的 CORS 响应；
+   * 配合 credentials: true，浏览器仍会拦截（origin 不匹配），
+   * 但缺少 ACAO 头是更明确、更安全的拒绝信号。
+   */
+  if (!isAllowed) {
+    return cors({
+      origin: '',
+      credentials: true,
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+      maxAge: 86400
+    })(c, next)
+  }
 
   return cors({
-    origin: isAllowed ? origin : allow[0],
+    origin,
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
