@@ -120,8 +120,18 @@
         </div>
       </div>
 
-      <!-- 标签云（3D） -->
-      <tagCloud v-if="!$common.mobile() && labelList.length > 0" :labels="labelList" />
+      <!-- 标签（3D 球）—— 从官方 chunk 0x1c88 逆向还原 -->
+      <div v-if="!$common.mobile() && labelList.length > 0"
+           class="aside-item shadow-box background-opacity">
+        <div class="slider-title">
+          <i class="fa fa-tag"></i> 标签
+          <div class="mac-style"></div>
+        </div>
+        <div class="slider-content" style="height: 270px">
+          <labelCloud :tags="labelList" width="270px" height="270px" radius="120"
+                      @tagClick="selectLabel" />
+        </div>
+      </div>
 
       <!-- 赞赏 -->
       <div class="shadow-box-mini background-opacity wow admire-box"
@@ -174,7 +184,7 @@
   export default {
     components: {
       vueSeamlessScroll,
-      tagCloud: () => import('./common/tagCloud')
+      labelCloud: () => import('./common/labelCloud')
     },
     data() {
       return {
@@ -235,6 +245,10 @@
           });
       },
       /** 取标签列表（复用官方的 listSortAndLabel 接口） */
+      selectLabel(item) {
+        this.$router.push({ path: '/sort', query: { labelId: item.labelId } })
+      },
+
       getLabels() {
         this.$http.get(this.$constant.baseURL + "/webInfo/listSortAndLabel")
           .then((res) => {

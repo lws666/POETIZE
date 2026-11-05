@@ -71,6 +71,24 @@ export default {
   },
 
   /**
+   * 生成随机颜色 —— 从 poetize.cn 的 app.js 逆向还原
+   *
+   * 官方实现：
+   *   getRandomColor() {
+   *     let r = Math.floor(256 * Math.random())
+   *     let g = Math.floor(256 * Math.random())
+   *     let b = Math.floor(256 * Math.random())
+   *     return this.getColor(r, g, b)     // 拼成 rgb(...)
+   *   }
+   */
+  getRandomColor() {
+    const r = Math.floor(256 * Math.random())
+    const g = Math.floor(256 * Math.random())
+    const b = Math.floor(256 * Math.random())
+    return `rgb(${r}, ${g}, ${b})`
+  },
+
+  /**
    * 表情包转换
    */
   faceReg(content) {
