@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Env, UserRow } from '../lib/types'
 import { legacyOk, legacyErr } from './response'
-import { requireWrite, requireLogin } from './guard'
+import { requireWrite, requireLogin, guardUser } from './guard'
 import { currentUserLite } from '../lib/auth'
 import { nowIso } from '../lib/crypto'
 import { sanitizeText, sanitizeUrl } from '../lib/sanitize'
@@ -182,7 +182,8 @@ modules.post('/weiYan/listWeiYan', async (c) => {
 
 /** POST /weiYan/saveWeiYan */
 modules.post('/weiYan/saveWeiYan', async (c) => {
-  const denied = await requireWrite(c)
+  // 微言是用户发布内容，登录即可
+  const denied = await requireLogin(c)
   if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
@@ -206,8 +207,7 @@ modules.post('/weiYan/saveWeiYan', async (c) => {
 
 /** GET /weiYan/deleteWeiYan */
 modules.get('/weiYan/deleteWeiYan', async (c) => {
-  const denied = await requireWrite(c)
-  if (denied) return denied
+  // 登录即可，下面会判断「本人或站长」
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const id = Number(c.req.query('id'))
@@ -248,7 +248,8 @@ modules.post('/weiYan/listNews', async (c) => {
 })
 
 modules.post('/weiYan/saveNews', async (c) => {
-  const denied = await requireWrite(c)
+  // 留言板，登录即可
+  const denied = await requireLogin(c)
   if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
@@ -329,7 +330,8 @@ modules.get('/family/listRandomFamily', async (c) => {
 })
 
 modules.post('/family/saveFamily', async (c) => {
-  const denied = await requireWrite(c)
+  // 表白墙，登录即可
+  const denied = await requireLogin(c)
   if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
@@ -346,12 +348,17 @@ modules.post('/family/saveFamily', async (c) => {
 })
 
 modules.get('/family/deleteFamily', async (c) => {
-  const denied = await requireWrite(c)
-  if (denied) return denied
   const u = await me(c)
   if (!u) return legacyErr('请先登录', 401)
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+
+  const row = await c.env.DB.prepare(`SELECT user_id FROM poem_family WHERE id=?1`)
+    .bind(id).first<{ user_id: number }>()
+  if (!row) return legacyErr('不存在', 404)
+  // 管理员可删任意，普通用户只能删自己发的
+  if (row.user_id !== u.id && u.user_type > 1) return legacyErr('无权删除', 403)
+
   await c.env.DB.prepare(`UPDATE poem_family SET deleted=1 WHERE id=?1`).bind(id).run()
   return legacyOk({ deleted: true })
 })
@@ -444,8 +451,14 @@ modules.post('/webInfo/listTreeHole', async (c) => {
 })
 
 modules.post('/webInfo/saveTreeHole', async (c) => {
-  const denied = await requireWrite(c)
+  /**
+   * 树洞是用户公开发言的地方，**登录即可**，不需要管理员。
+   * （之前误用 requireWrite，导致普通用户发不了树洞）
+   */
+  const denied = await requireLogin(c)
   if (denied) return denied
+
+  const me = await guardUser(c)
   const b = await c.req.json<{ message?: string; avatar?: string }>()
     .catch(() => ({} as { message?: string; avatar?: string }))
   const rawMsg = String(b.message || '').trim()
@@ -453,16 +466,30 @@ modules.post('/webInfo/saveTreeHole', async (c) => {
   const message = sanitizeText(rawMsg)
 
   const res = await c.env.DB
-    .prepare(`INSERT INTO poem_treehole (avatar,message,create_time,deleted) VALUES (?1,?2,?3,0)`)
-    .bind(String(b.avatar || ''), message, nowIso()).run()
+    .prepare(`INSERT INTO poem_treehole (avatar,message,create_time,deleted,user_id) VALUES (?1,?2,?3,0,?4)`)
+    .bind(String(b.avatar || ''), message, nowIso(), me?.id ?? 0).run()
   return legacyOk({ id: Number(res.meta.last_row_id) })
 })
 
 modules.get('/webInfo/deleteTreeHole', async (c) => {
-  const denied = await requireWrite(c)
+  const denied = await requireLogin(c)
   if (denied) return denied
+
+  const me = await guardUser(c)
   const id = Number(c.req.query('id'))
   if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+
+  const row = await c.env.DB
+    .prepare(`SELECT user_id FROM poem_treehole WHERE id=?1`)
+    .bind(id).first<{ user_id: number }>()
+  if (!row) return legacyErr('树洞不存在', 404)
+
+  // 管理员可删任意，普通用户只能删自己发的
+  const isAdmin = me && me.user_type <= 1
+  if (!isAdmin && row.user_id !== me?.id) {
+    return legacyErr('只能删除自己发的树洞', 403)
+  }
+
   await c.env.DB.prepare(`UPDATE poem_treehole SET deleted=1 WHERE id=?1`).bind(id).run()
   return legacyOk({ deleted: true })
 })
