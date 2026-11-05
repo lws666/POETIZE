@@ -29,7 +29,7 @@ B2_REGION = "us-east-005"
 B2_BUCKET = "Valaxy"
 B2_PUBLIC_URL = "https://img.lwsnb.eu.cc"
 SESSION_TTL_HOURS = "168"
-MAIL_FROM = "admin@lwsnb.eu.cc"
+MAIL_FROM = "lwsnb555555@gmail.com"
 MAIL_FROM_NAME = "谢谢の博客"
 
 ALLOWED_ORIGINS = "https://www.lwsnb.eu.cc,https://lwsnb-poetize.pages.dev,https://lwsnb-sveltekit.pages.dev,https://poetize-official.pages.dev"

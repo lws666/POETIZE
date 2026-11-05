@@ -6,6 +6,7 @@ import { hashPassword, randomToken, sha256, verifyPassword, nowIso } from '../li
 import { legacyOk, legacyErr } from './response'
 import { toUserVO, roleOf, randomAvatar } from '../lib/userModel'
 import { consumeCode } from '../routes/mail'
+import { sendMail, genCode, verifyCodeHtml } from '../lib/mail'
 
 /**
  * 官方 /user/* 适配 —— 与 poetize-server 的 UserServiceImpl 行为对齐。
@@ -262,6 +263,68 @@ async function currentUser(c: {
       .first<UserRow>()) ?? null
   )
 }
+
+
+/**
+ * GET /user/getCodeForForgetPassword
+ *
+ * 官方前端「获取验证码」按钮走这个路径（user.vue getCode）。
+ * 拿 email 参数，发 6 位验证码到该邮箱。
+ */
+user.get('/getCodeForForgetPassword', async (c) => {
+  const email = (c.req.query('email') || '').trim().toLowerCase()
+  if (!email) return legacyErr('请输入邮箱', 400)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return legacyErr('邮箱格式不正确', 400)
+
+  const code = genCode()
+  const expires = new Date(Date.now() + 15 * 60_000).toISOString()
+
+  await c.env.DB
+    .prepare(`UPDATE email_codes SET used=1 WHERE email=?1 AND used=0`)
+    .bind(email).run()
+
+  await c.env.DB
+    .prepare(`INSERT INTO email_codes (email,code,purpose,attempts,used,expires_at,created_at)
+              VALUES (?1,?2,'register',0,0,?3,?4)`)
+    .bind(email, code, expires, nowIso()).run()
+
+  try {
+    await sendMail(c.env as never, {
+      to: email,
+      subject: `【谢谢の博客】验证码 ${code}`,
+      html: verifyCodeHtml(code, email.split('@')[0], 15)
+    })
+  } catch (e) {
+    return legacyErr(`邮件发送失败：${(e as Error).message}`, 502)
+  }
+
+  return legacyOk({ sent: true })
+})
+
+/** GET /user/getCodeForBind —— 绑定手机/邮箱，复用同一逻辑 */
+user.get('/getCodeForBind', async (c) => {
+  const email = (c.req.query('email') || '').trim().toLowerCase()
+  if (!email) return legacyErr('请输入邮箱', 400)
+
+  const code = genCode()
+  const expires = new Date(Date.now() + 15 * 60_000).toISOString()
+  await c.env.DB.prepare(`UPDATE email_codes SET used=1 WHERE email=?1 AND used=0`).bind(email).run()
+  await c.env.DB
+    .prepare(`INSERT INTO email_codes (email,code,purpose,attempts,used,expires_at,created_at)
+              VALUES (?1,?2,'bind',0,0,?3,?4)`)
+    .bind(email, code, expires, nowIso()).run()
+
+  try {
+    await sendMail(c.env as never, {
+      to: email,
+      subject: `【谢谢の博客】验证码 ${code}`,
+      html: verifyCodeHtml(code, email.split('@')[0], 15)
+    })
+  } catch (e) {
+    return legacyErr(`邮件发送失败：${(e as Error).message}`, 502)
+  }
+  return legacyOk({ sent: true })
+})
 
 /** 其余 user/* 占位 */
 user.all('/*', (c) => legacyOk({}))
