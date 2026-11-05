@@ -17,6 +17,7 @@ import { legacy } from './legacy'
 import siteConfig from './routes/siteConfig'
 import postAccess from './routes/postAccess'
 import { seo } from './routes/seo'
+import mail from './routes/mail'
 
 const app = new Hono<AuthCtx & { Bindings: Env }>()
 
@@ -96,6 +97,9 @@ app.route('/api/site-config', siteConfig)
 
 /* 文章访问控制：设置等级/密码/登录可见 */
 app.route('/api/post-access', postAccess)
+
+/* 邮箱验证码 */
+app.route('/api/mail', mail)
 
 /* SEO：sitemap / robots / rss（直接挂在根路径，前端转发过来） */
 app.route('/', seo)

@@ -21,7 +21,7 @@ routes = [
 [[d1_databases]]
 binding = "DB"
 database_name = "blog"
-database_id = "<YOUR_D1_DATABASE_ID>"
+database_id = "d894eec2-4dc8-473a-92ca-efe3c13261de"
 
 [vars]
 B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
@@ -29,6 +29,9 @@ B2_REGION = "us-east-005"
 B2_BUCKET = "Valaxy"
 B2_PUBLIC_URL = "https://img.lwsnb.eu.cc"
 SESSION_TTL_HOURS = "168"
+MAIL_FROM = "admin@lwsnb.eu.cc"
+MAIL_FROM_NAME = "谢谢の博客"
+
 ALLOWED_ORIGINS = "https://www.lwsnb.eu.cc,https://lwsnb-poetize.pages.dev,https://lwsnb-sveltekit.pages.dev,https://poetize-official.pages.dev"
 
 # 密钥沿用旧 worker 的同名 secret（线上已存在，无需重新注入）：

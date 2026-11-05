@@ -5,6 +5,7 @@ import { findUserByName } from '../lib/auth'
 import { hashPassword, randomToken, sha256, verifyPassword, nowIso } from '../lib/crypto'
 import { legacyOk, legacyErr } from './response'
 import { toUserVO, roleOf, randomAvatar } from '../lib/userModel'
+import { consumeCode } from '../routes/mail'
 
 /**
  * 官方 /user/* 适配 —— 与 poetize-server 的 UserServiceImpl 行为对齐。
@@ -140,6 +141,19 @@ user.post('/regist', async (c) => {
 
   const plain = (await aesEcbDecrypt(password)) ?? password
   if (plain.length < 6) return legacyErr('密码至少 6 位', 400)
+
+  /**
+   * 邮箱验证码校验。
+   *
+   * 官方前端把验证码放在 code 字段（注册表单第 4 个输入框）。
+   * 如果提供了 code 就必须校验通过；不提供则跳过（兼容脚本注册）。
+   */
+  const code = (b.code || '').trim()
+  if (code) {
+    if (!email) return legacyErr('未填写邮箱，无法校验验证码', 400)
+    const vr = await consumeCode(c.env.DB, email, code, 'register')
+    if (!vr.ok) return legacyErr(vr.reason || '验证码错误', 400)
+  }
 
   const dup = await c.env.DB.prepare(`SELECT id FROM users WHERE username=?1`).bind(username).first()
   if (dup) return legacyErr('用户名重复', 409)

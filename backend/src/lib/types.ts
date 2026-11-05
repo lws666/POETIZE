@@ -7,6 +7,10 @@ export interface Env {
   B2_BUCKET: string
   /** 与旧 worker 保持同名，直接复用线上已有 secret */
   B2_ACCESS_KEY_ID: string
+  /** Brevo 邮件服务 */
+  BREVO_API_KEY: string
+  MAIL_FROM: string
+  MAIL_FROM_NAME: string
   B2_SECRET_ACCESS_KEY: string
   B2_PUBLIC_URL: string
   /** 会话与令牌 */
