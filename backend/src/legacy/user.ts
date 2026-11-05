@@ -272,7 +272,13 @@ async function currentUser(c: {
  * 拿 email 参数，发 6 位验证码到该邮箱。
  */
 user.get('/getCodeForForgetPassword', async (c) => {
-  const email = (c.req.query('email') || '').trim().toLowerCase()
+  /**
+   * 前端 user.vue 的 checkParams() 传的是 **place**，不是 email：
+   *   params.place = this.email
+   * 只读 email 会导致永远返回「请输入邮箱」。
+   * 这里同时兼容 place / email 两种写法。
+   */
+  const email = (c.req.query('place') || c.req.query('email') || '').trim().toLowerCase()
   if (!email) return legacyErr('请输入邮箱', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return legacyErr('邮箱格式不正确', 400)
 
@@ -303,7 +309,7 @@ user.get('/getCodeForForgetPassword', async (c) => {
 
 /** GET /user/getCodeForBind —— 绑定手机/邮箱，复用同一逻辑 */
 user.get('/getCodeForBind', async (c) => {
-  const email = (c.req.query('email') || '').trim().toLowerCase()
+  const email = (c.req.query('place') || c.req.query('email') || '').trim().toLowerCase()
   if (!email) return legacyErr('请输入邮箱', 400)
 
   const code = genCode()
