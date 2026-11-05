@@ -124,8 +124,13 @@ webInfo.get('/getWebInfo', async (c) => {
 
 /** GET /webInfo/getSortInfo —— 分类（含 labels） */
 webInfo.get('/getSortInfo', async (c) => {
+  /**
+   * 排序必须与 article.ts 的 listArticle 完全一致。
+   * deriveLabels 按遍历顺序自增分配标签 id，
+   * 顺序不同 → 同一标签不同 id → 前端点标签过滤扑空。
+   */
   const { results } = await c.env.DB
-    .prepare(`SELECT * FROM posts WHERE draft = 0`)
+    .prepare(`SELECT * FROM posts WHERE draft = 0 ORDER BY top DESC, date DESC, id DESC`)
     .all<PostRow>()
 
   const sorts = deriveSorts(results)
@@ -141,8 +146,15 @@ webInfo.get('/getSortInfo', async (c) => {
 
 /** GET /webInfo/listSortAndLabel —— 同 getSortInfo，官方两处都在用 */
 webInfo.get('/listSortAndLabel', async (c) => {
+  /**
+   * 排序必须和 article.ts 的 loadAll **完全一致**。
+   *
+   * deriveLabels 是按文章遍历顺序自增分配 id 的，
+   * 两个接口如果顺序不同，同一标签会拿到不同 id ——
+   * 前端拿着 listSortAndLabel 的 id 去 listArticle 过滤就会扑空。
+   */
   const { results } = await c.env.DB
-    .prepare(`SELECT * FROM posts WHERE draft = 0`)
+    .prepare(`SELECT * FROM posts WHERE draft = 0 ORDER BY top DESC, date DESC, id DESC`)
     .all<PostRow>()
   const sorts = deriveSorts(results)
   const labels = deriveLabels(results, sorts)
@@ -223,8 +235,13 @@ webInfo.get('/getHistoryInfo', async (c) => {
 
 /** GET /webInfo/getSortInfo —— 分类（含 labels） */
 webInfo.get('/getSortInfo', async (c) => {
+  /**
+   * 排序必须与 article.ts 的 listArticle 完全一致。
+   * deriveLabels 按遍历顺序自增分配标签 id，
+   * 顺序不同 → 同一标签不同 id → 前端点标签过滤扑空。
+   */
   const { results } = await c.env.DB
-    .prepare(`SELECT * FROM posts WHERE draft = 0`)
+    .prepare(`SELECT * FROM posts WHERE draft = 0 ORDER BY top DESC, date DESC, id DESC`)
     .all<PostRow>()
 
   const sorts = deriveSorts(results)
@@ -240,8 +257,15 @@ webInfo.get('/getSortInfo', async (c) => {
 
 /** GET /webInfo/listSortAndLabel —— 同 getSortInfo，官方两处都在用 */
 webInfo.get('/listSortAndLabel', async (c) => {
+  /**
+   * 排序必须和 article.ts 的 loadAll **完全一致**。
+   *
+   * deriveLabels 是按文章遍历顺序自增分配 id 的，
+   * 两个接口如果顺序不同，同一标签会拿到不同 id ——
+   * 前端拿着 listSortAndLabel 的 id 去 listArticle 过滤就会扑空。
+   */
   const { results } = await c.env.DB
-    .prepare(`SELECT * FROM posts WHERE draft = 0`)
+    .prepare(`SELECT * FROM posts WHERE draft = 0 ORDER BY top DESC, date DESC, id DESC`)
     .all<PostRow>()
   const sorts = deriveSorts(results)
   const labels = deriveLabels(results, sorts)

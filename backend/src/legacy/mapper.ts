@@ -122,22 +122,55 @@ export function deriveSorts(rows: PostRow[]): LegacySort[] {
   }))
 }
 
-/** 由 posts 聚合出 Label（用 tags 字段） */
+/**
+ * 由 posts 聚合出 Label（用 tags 字段）
+ *
+ * **内部强制排序**：不依赖调用方 SQL 的 ORDER BY。
+ *
+ * 标签 id 是按遍历顺序自增分配的，如果不同接口传进来的 rows
+ * 顺序不同，同一标签就会拿到不同 id ——
+ * 前端拿着 A 接口的 id 去 B 接口过滤，必然扑空
+ * （表现为「点标签显示全部文章」或「显示错误的文章」）。
+ *
+ * 这里先按 (topDesc, dateDesc, idDesc) 排序再分配，保证任何调用方
+ * 传入什么顺序，产出的 id 映射都一致。
+ */
 export function deriveLabels(rows: PostRow[], sorts: LegacySort[]): LegacyLabel[] {
   const sortId = new Map(sorts.map(s => [s.sortName, s.id]))
   const out: LegacyLabel[] = []
   const seen = new Map<string, number>()
   let id = 1
 
+  // 与 article.ts 的 listArticle 保持同序
+  rows = [...rows].sort((a, b) => {
+    if ((b.top || 0) !== (a.top || 0)) return (b.top || 0) - (a.top || 0)
+    const d = String(b.date || '').localeCompare(String(a.date || ''))
+    if (d !== 0) return d
+    return (b.id || 0) - (a.id || 0)
+  })
+
+  /**
+   * 按**标签名**全局去重，不能按 `分类::标签` 去重。
+   *
+   * 之前用 `${cat}::${t}` 做 key，同一标签挂在多个分类下时
+   * 会产生两条记录、两个不同 id：
+   *   文章 A（技术）的 SEO → id=9
+   *   文章 B（随笔）的 SEO → id=15
+   * 前端标签云显示的是去重后的名字，点进去只带其中一个 id，
+   * 结果只能过滤出一部分文章 —— 表现为「标签页文章不全」。
+   *
+   * 改成按名字去重后，一个标签只有一个 id，countOfLabel 是全局总数。
+   * sortId 取首次出现时的分类，仅用于前端分组展示。
+   */
   for (const r of rows) {
     const cat = parseArr(r.categories)[0] || '未分类'
     for (const t of parseArr(r.tags)) {
-      const key = `${cat}::${t}`
-      if (seen.has(key)) {
-        out.find(x => x.id === seen.get(key))!.countOfLabel++
+      if (seen.has(t)) {
+        const hit = out.find(x => x.id === seen.get(t))
+        if (hit) hit.countOfLabel++
         continue
       }
-      seen.set(key, id)
+      seen.set(t, id)
       out.push({
         id: id++,
         labelName: t,

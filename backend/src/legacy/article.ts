@@ -8,8 +8,9 @@ const ok = legacyOk
 /** 官方信封版的错误响应 */
 const notFound = (m: string) => legacyErr(m, 404)
 const badRequest = (m: string) => legacyErr(m, 400)
-import { toLegacyArticle, deriveSorts } from './mapper'
+import { toLegacyArticle, deriveSorts, deriveLabels } from './mapper'
 import { checkAccess } from '../lib/access'
+import { parseArr } from '../lib/posts'
 import { currentUserLite } from '../lib/auth'
 
 /**
@@ -44,15 +45,65 @@ article.post('/listArticle', async (c) => {
   const current = Math.max(1, Number(b.current) || 1)
   const size = Math.min(50, Math.max(1, Number(b.size) || 10))
 
-  let rows = await loadAll(c.env.DB)
-  const sorts = deriveSorts(rows)
+  /**
+   * 全量文章 —— 必须和 listSortAndLabel 完全一致的查询与排序。
+   *
+   * deriveLabels 是按遍历顺序自增分配 id 的，如果两处顺序不同，
+   * 同一标签会拿到不同 id：前端拿 listSortAndLabel 的 id 来过滤，
+   * 后端用另一套 id 反查，就会匹配到错误的标签。
+   *
+   * 之前的 bug 正是如此：SEO 在前端是 id=9，在 listArticle 里算成别的。
+   */
+  const { results: allRows } = await c.env.DB
+    .prepare(`SELECT * FROM posts WHERE draft = 0 ORDER BY top DESC, date DESC, id DESC`)
+    .all<PostRow>()
+
+  const sorts = deriveSorts(allRows)
   const sortIdByName = new Map(sorts.map(s => [s.sortName, s.id]))
+
+  // 用全量数据算标签 id，与 listSortAndLabel 同源同序
+  const allLabels = deriveLabels(allRows, sorts)
+  const labelIds = new Map<string, number>()
+  for (const l of allLabels) {
+    if (!labelIds.has(l.labelName)) labelIds.set(l.labelName, l.id)
+  }
+
+  let rows = allRows
 
   // 按 sort 过滤
   if (b.sortId) {
     const target = sorts.find(s => s.id === Number(b.sortId))
     if (target) {
-      rows = rows.filter(r => (JSON.parse(r.categories || '[]') as string[]).includes(target.sortName))
+      rows = rows.filter(r => parseArr(r.categories).includes(target.sortName))
+    }
+  }
+
+  /**
+   * 按 label 过滤。
+   *
+   * 之前完全没实现：前端点标签跳 /sort?labelId=N，
+   * 后端忽略这个参数，导致「标签页显示全部文章」。
+   *
+   * labelId 由 deriveLabels 动态生成（没有独立表），
+   * 所以要先反查出标签名，再按 tags 字段过滤。
+   */
+  if (b.labelId) {
+    const targetLabel = allLabels.find(l => l.id === Number(b.labelId))
+    if (targetLabel) {
+      // 同一标签名可能挂在多个分类下，任一命中即算
+      const names = new Set(
+        allLabels.filter(l => l.labelName === targetLabel.labelName).map(l => l.labelName)
+      )
+      /**
+       * 必须用 parseArr，不能裸 JSON.parse。
+       * 历史数据里 tags 存在 {} 这种空对象（id=57），
+       * JSON.parse 得到对象，.some 直接 TypeError → 500。
+       * parseArr 会兜底成 []。
+       */
+      rows = rows.filter(r => parseArr(r.tags).some((t: string) => names.has(t)))
+    } else {
+      // 标签不存在 → 返回空，不要退化成"全部"
+      rows = []
     }
   }
 
@@ -67,7 +118,7 @@ article.post('/listArticle', async (c) => {
   const page = rows.slice(start, start + size)
 
   return ok({
-    records: page.map(r => toLegacyArticle(r, { sortIdByName })),
+    records: page.map(r => toLegacyArticle(r, { sortIdByName, labelIds })),
     total,
     size,
     current,
