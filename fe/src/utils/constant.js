@@ -1,7 +1,7 @@
 export default {
   // 测试环境
   baseURL: "https://api.lwsnb.eu.cc/api/legacy",
-  imBaseURL: "/im",
+  imBaseURL: "",
   webURL: location.origin,
 
   // 生产环境

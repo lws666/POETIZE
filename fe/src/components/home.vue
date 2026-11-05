@@ -80,13 +80,6 @@
               </div>
             </li>
 
-            <!-- 聊天室 -->
-            <li @click="goIm()" v-if="$store.state.sysConfig['bar.menu.show'].includes('联系我')">
-              <div class="my-menu">
-                💬 <span>联系我</span>
-              </div>
-            </li>
-
             <!-- 后台 -->
             <li @click="goAdmin()" v-if="$store.state.sysConfig['bar.menu.show'].includes('后台')">
               <div class="my-menu">
@@ -241,13 +234,6 @@
             </div>
           </li>
 
-          <!-- 聊天室 -->
-          <li @click="goIm()" v-if="$store.state.sysConfig['bar.menu.show'].includes('联系我')">
-            <div>
-              💬 <span>联系我</span>
-            </div>
-          </li>
-
           <!-- 后台 -->
           <li @click="goAdmin()" v-if="$store.state.sysConfig['bar.menu.show'].includes('后台')">
             <div>
@@ -390,17 +376,6 @@
         this.toolbarDrawer = false;
       },
 
-      goIm() {
-        if (this.$common.isEmpty(this.$store.state.currentUser)) {
-          this.$message({
-            message: "请先登录！",
-            type: "error"
-          });
-        } else {
-          /* 改为站内路由跳转，不再 window.open 外部地址 */
-          this.$router.push({ path: "/im" });
-        }
-      },
 
       goAdmin() {
         window.open(this.$constant.webURL + "/admin");
