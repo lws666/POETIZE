@@ -4,7 +4,8 @@ import type { Env, UserRow } from '../lib/types'
 import { findUserByName } from '../lib/auth'
 import { hashPassword, randomToken, sha256, verifyPassword, nowIso } from '../lib/crypto'
 import { legacyOk, legacyErr } from './response'
-import { toUserVO, roleOf, randomAvatar } from '../lib/userModel'
+import { toUserVO, roleOf } from '../lib/userModel'
+import { generateAvatar } from '../lib/avatar'
 import { consumeCode } from '../routes/mail'
 import { sendMail, genCode, verifyCodeHtml } from '../lib/mail'
 
@@ -167,13 +168,23 @@ user.post('/regist', async (c) => {
     if (p) return legacyErr('手机号重复', 409)
   }
 
-  // 官方默认：user_type=2（普通用户）、user_lv=1、随机头像
+  /**
+   * 默认头像用内联 SVG 生成，不用 static 图片。
+   *
+   * 原来的 randomAvatar() 返回 /assets/avatar-1..4.png，
+   * 但这几个文件根本不存在 —— Pages 的 SPA fallback 让它们返回
+   * index.html（content-type: text/html），<img> 加载失败显示空白。
+   *
+   * 现在按用户名哈希取色 + 取首字，零请求且每人不同。
+   */
+  const avatar = generateAvatar(username)
+
   const res = await c.env.DB
     .prepare(
       `INSERT INTO users (username,password_hash,role,user_type,user_lv,email,phone_number,avatar,created_at,user_status)
        VALUES (?1,?2,'read',2,1,?3,?4,?5,?6,1)`
     )
-    .bind(username, await hashPassword(plain), email, phone, randomAvatar(), nowIso())
+    .bind(username, await hashPassword(plain), email, phone, avatar, nowIso())
     .run()
 
   const id = Number(res.meta.last_row_id)

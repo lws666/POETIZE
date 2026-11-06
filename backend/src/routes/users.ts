@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Env, Role, UserRow } from '../lib/types'
+import { generateAvatar } from '../lib/avatar'
 import { requireAdmin, type AuthCtx } from '../lib/auth'
 import { hashPassword, nowIso } from '../lib/crypto'
 import { roleOf, userTypeOf, isValidType, isValidLv } from '../lib/userModel'
@@ -48,9 +49,10 @@ r.post('/', async (c) => {
     .bind(b.username).first()
   if (exists) return fail('用户名已存在', 409, 'conflict')
 
+  // 后台建号也给默认头像，否则新用户头像是空白
   const res = await c.env.DB
-    .prepare(`INSERT INTO users (username, password_hash, role, created_at) VALUES (?1,?2,?3,?4)`)
-    .bind(b.username, await hashPassword(b.password), role, nowIso())
+    .prepare(`INSERT INTO users (username, password_hash, role, avatar, created_at) VALUES (?1,?2,?3,?4,?5)`)
+    .bind(b.username, await hashPassword(b.password), role, generateAvatar(b.username), nowIso())
     .run()
 
   return ok({ id: res.meta.last_row_id, username: b.username, role }, { status: 201 })
