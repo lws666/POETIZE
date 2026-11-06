@@ -265,6 +265,164 @@ modules.post('/weiYan/saveNews', async (c) => {
   return legacyOk({ id: Number(res.meta.last_row_id) })
 })
 
+
+/* ══════════════════ 友链（friend） ══════════════════ */
+
+/**
+ * POST /webInfo/saveFriend —— 提交友链申请
+ *
+ * 前端 friend.vue 提交 { title, introduction, cover, url }，
+ * 提交后提示「待管理员审核」——所以必须落库为 status=0，
+ * 不能直接展示。
+ *
+ * 登录不做强制要求（友链是公开申请渠道），
+ * 但登录了会记下 user_id 便于追溯。
+ */
+modules.post('/webInfo/saveFriend', async (c) => {
+  const me = await guardUser(c)
+  const b = await c.req.json<{ title?: string; introduction?: string; cover?: string; url?: string }>()
+    .catch(() => ({} as { title?: string; introduction?: string; cover?: string; url?: string }))
+
+  const title = sanitizeText(String(b.title || '').trim())
+  const introduction = sanitizeText(String(b.introduction || '').trim())
+  const cover = sanitizeUrl(String(b.cover || '').trim())
+  const url = sanitizeUrl(String(b.url || '').trim())
+
+  if (!title) return legacyErr('请填写网站名称', 400)
+  if (title.length > 30) return legacyErr('名称最多 30 字', 400)
+  if (!url) return legacyErr('请填写有效的网址（http/https）', 400)
+
+  // 同一网址不重复提交
+  const dup = await c.env.DB
+    .prepare(`SELECT id FROM poem_friend WHERE url=?1 AND deleted=0 AND status IN (0,1)`)
+    .bind(url).first()
+  if (dup) return legacyErr('该网址已提交过，请等待审核', 409)
+
+  const res = await c.env.DB
+    .prepare(`INSERT INTO poem_friend (title,introduction,cover,url,status,sort_order,user_id,create_time,deleted)
+              VALUES (?1,?2,?3,?4,0,0,?5,?6,0)`)
+    .bind(title, introduction, cover, url, me?.id ?? 0, nowIso()).run()
+
+  return legacyOk({ id: Number(res.meta.last_row_id), status: 0 })
+})
+
+/**
+ * GET /webInfo/listFriend —— 已审核通过的友链（前台展示）
+ *
+ * **必须返回分组对象**，不是数组。
+ * friend.vue 的模板是：
+ *   friendList.hasOwnProperty('🥇友情链接')
+ *   <card :resourcePathList="friendList['🥇友情链接']">
+ *   v-for="(value, key) in friendList"
+ * 返回数组的话 hasOwnProperty 全是 false，页面一片空白。
+ */
+modules.get('/webInfo/listFriend', async (c) => {
+  const { results } = await c.env.DB
+    .prepare(`SELECT id,title,introduction,cover,url,sort_order,create_time FROM poem_friend
+              WHERE deleted=0 AND status=1 ORDER BY sort_order DESC, id ASC`)
+    .all<Record<string, unknown>>()
+
+  const items = results.map(r => ({
+    id: r.id,
+    title: r.title,
+    // card.vue 用 introduction 当描述
+    introduction: r.introduction,
+    cover: r.cover,
+    url: r.url,
+    // card.vue 可能读取这两个字段，补上避免 undefined
+    type: 'friend',
+    createTime: r.create_time
+  }))
+
+  // 全部归到「🥇友情链接」分组 —— 前端对这个 key 有专门的固定标题
+  const grouped: Record<string, typeof items> = {}
+  if (items.length) grouped['🥇友情链接'] = items
+  return legacyOk(grouped)
+})
+
+/**
+ * GET /webInfo/listAdminFriend —— 后台审核列表
+ * status 可选：0 待审核 / 1 已通过 / 2 已拒绝；不传返回全部
+ */
+modules.get('/webInfo/listAdminFriend', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
+  const status = c.req.query('status')
+  const where = status === undefined || status === ''
+    ? `deleted=0`
+    : `deleted=0 AND status=${Number(status) || 0}`
+
+  const { results } = await c.env.DB
+    .prepare(`SELECT * FROM poem_friend WHERE ${where} ORDER BY status ASC, id DESC`)
+    .all<Record<string, unknown>>()
+
+  return legacyOk(results.map(r => ({
+    id: r.id,
+    title: r.title,
+    introduction: r.introduction,
+    cover: r.cover,
+    url: r.url,
+    status: r.status,
+    sortOrder: r.sort_order,
+    userId: r.user_id,
+    createTime: r.create_time
+  })))
+})
+
+/** GET /webInfo/auditFriend?id=&status= —— 审核（1 通过 / 2 拒绝） */
+modules.get('/webInfo/auditFriend', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
+  const id = Number(c.req.query('id'))
+  const status = Number(c.req.query('status'))
+  if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+  if (status !== 1 && status !== 2) return legacyErr('status 只能是 1 或 2', 400)
+
+  await c.env.DB.prepare(`UPDATE poem_friend SET status=?1 WHERE id=?2`).bind(status, id).run()
+  return legacyOk({ id, status })
+})
+
+/** GET /webInfo/deleteFriend?id= —— 删除 */
+modules.get('/webInfo/deleteFriend', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
+  const id = Number(c.req.query('id'))
+  if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+
+  await c.env.DB.prepare(`UPDATE poem_friend SET deleted=1 WHERE id=?1`).bind(id).run()
+  return legacyOk({ deleted: true })
+})
+
+/** POST /webInfo/updateFriend —— 后台编辑友链 */
+modules.post('/webInfo/updateFriend', async (c) => {
+  const denied = await requireWrite(c)
+  if (denied) return denied
+
+  const b = await c.req.json<{ id?: number; title?: string; introduction?: string; cover?: string; url?: string; sortOrder?: number }>()
+    .catch(() => ({} as { id?: number; title?: string; introduction?: string; cover?: string; url?: string; sortOrder?: number }))
+  const id = Number(b.id)
+  if (!Number.isFinite(id)) return legacyErr('id 非法', 400)
+
+  const sets: string[] = []
+  const vals: unknown[] = []
+  const push = (col: string, v: unknown) => { sets.push(`${col}=?${vals.length + 1}`); vals.push(v) }
+
+  if (b.title !== undefined) push('title', sanitizeText(String(b.title).trim()))
+  if (b.introduction !== undefined) push('introduction', sanitizeText(String(b.introduction).trim()))
+  if (b.cover !== undefined) push('cover', sanitizeUrl(String(b.cover).trim()))
+  if (b.url !== undefined) push('url', sanitizeUrl(String(b.url).trim()))
+  if (b.sortOrder !== undefined) push('sort_order', Number(b.sortOrder) || 0)
+
+  if (!sets.length) return legacyErr('没有要更新的字段', 400)
+
+  await c.env.DB.prepare(`UPDATE poem_friend SET ${sets.join(',')} WHERE id=?${vals.length + 1}`)
+    .bind(...vals, id).run()
+  return legacyOk({ updated: true })
+})
+
 /* ══════════════════ 表白墙 / 恋爱笔记 ══════════════════ */
 
 modules.post('/family/listFamily', async (c) => {

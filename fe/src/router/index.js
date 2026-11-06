@@ -57,6 +57,10 @@ const routes = [
       name: "user",
       component: () => import('../components/user')
     }, {
+      path: "/friend",
+      name: "friend",
+      component: () => import('../components/friend')
+    }, {
       path: "/letter",
       name: "letter",
       component: () => import('../components/letter')
@@ -119,6 +123,10 @@ const routes = [
       path: '/resourcePathList',
       name: 'resourcePathList',
       component: () => import('../components/admin/resourcePathList')
+    }, {
+      path: '/friendList',
+      name: 'friendList',
+      component: () => import('../components/admin/friendList')
     }]
   },
   {

@@ -107,6 +107,11 @@
           index: "/loveList",
           title: "表白墙",
           isBoss: true
+        }, {
+          icon: "el-icon-link",
+          index: "/friendList",
+          title: "友链管理",
+          isBoss: true
         }]
       }
     },

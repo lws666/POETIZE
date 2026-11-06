@@ -80,6 +80,13 @@
               </div>
             </li>
 
+            <!-- 友链 -->
+            <li @click="$router.push({path: '/friend'})" v-if="$store.state.sysConfig['bar.menu.show'].includes('友链')">
+              <div class="my-menu">
+                🔗 <span>友链</span>
+              </div>
+            </li>
+
             <!-- 后台 -->
             <li @click="goAdmin()" v-if="$store.state.sysConfig['bar.menu.show'].includes('后台')">
               <div class="my-menu">
@@ -231,6 +238,13 @@
           <li @click="smallMenu({path: '/message'})" v-if="$store.state.sysConfig['bar.menu.show'].includes('留言')">
             <div>
               📪 <span>留言</span>
+            </div>
+          </li>
+
+          <!-- 友链 -->
+          <li @click="smallMenu({path: '/friend'})" v-if="$store.state.sysConfig['bar.menu.show'].includes('友链')">
+            <div>
+              🔗 <span>友链</span>
             </div>
           </li>
 
