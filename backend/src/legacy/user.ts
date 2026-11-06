@@ -291,7 +291,7 @@ user.get('/getCodeForForgetPassword', async (c) => {
 
   await c.env.DB
     .prepare(`INSERT INTO email_codes (email,code,purpose,attempts,used,expires_at,created_at)
-              VALUES (?1,?2,'register',0,0,?3,?4)`)
+              VALUES (?1,?2,'reset',0,0,?3,?4)`)
     .bind(email, code, expires, nowIso()).run()
 
   try {
@@ -330,6 +330,100 @@ user.get('/getCodeForBind', async (c) => {
     return legacyErr(`邮件发送失败：${(e as Error).message}`, 502)
   }
   return legacyOk({ sent: true })
+})
+
+
+/**
+ * POST /user/updateSecretInfo —— 绑定 / 修改邮箱、手机号
+ *
+ * 前端 user.vue 的 updateSecretInfo() 传的是：
+ *   { code, password(AES加密), place, flag }
+ *   flag=1 手机号，flag=2 邮箱
+ *
+ * 之前这个接口**完全没实现**：请求落到 user.all('/*') 兜底，
+ * 返回 200 + {}，前端拿到空对象当成功，实际什么都没改 ——
+ * 用户表现为「点了绑定没反应」。
+ */
+user.post('/updateSecretInfo', async (c) => {
+  const me = await currentUser(c)
+  if (!me) return legacyErr('请先登录', 401)
+
+  const b = await readBody(c)
+  const code = String(b.code || '').trim()
+  const place = String(b.place || '').trim()
+  const flag = Number(b.flag) || 0
+  const rawPwd = String(b.password || '')
+
+  if (!code) return legacyErr('请输入验证码', 400)
+  if (!place) return legacyErr(flag === 1 ? '请输入手机号' : '请输入邮箱', 400)
+  if (!rawPwd) return legacyErr('请输入密码', 400)
+
+  // 密码校验 —— 前端传的是 AES 加密后的，先解出明文
+  const plain = await aesEcbDecrypt(rawPwd)
+  if (plain === null) return legacyErr('密码格式错误', 400)
+  const okPwd = await verifyPassword(plain, me.password_hash)
+  if (!okPwd) return legacyErr('密码错误', 401)
+
+  const target = flag === 2 ? place.toLowerCase() : place
+
+  // 验证码必须是 bind 用途
+  const check = await consumeCode(c.env.DB, target, code, 'bind')
+  if (!check.ok) return legacyErr(check.reason || '验证码错误', 400)
+
+  // 唯一性检查
+  if (flag === 2) {
+    const dup = await c.env.DB
+      .prepare(`SELECT id FROM users WHERE email=?1 AND id<>?2`)
+      .bind(target, me.id).first()
+    if (dup) return legacyErr('该邮箱已被其他账号绑定', 409)
+    await c.env.DB.prepare(`UPDATE users SET email=?1 WHERE id=?2`).bind(target, me.id).run()
+  } else {
+    const dup = await c.env.DB
+      .prepare(`SELECT id FROM users WHERE phone_number=?1 AND id<>?2`)
+      .bind(target, me.id).first()
+    if (dup) return legacyErr('该手机号已被其他账号绑定', 409)
+    await c.env.DB.prepare(`UPDATE users SET phone_number=?1 WHERE id=?2`).bind(target, me.id).run()
+  }
+
+  const row = await c.env.DB.prepare(`SELECT * FROM users WHERE id=?1`).bind(me.id).first<UserRow>()
+  return legacyOk(toUserVO(row!))
+})
+
+/**
+ * POST /user/updateForForgetPassword —— 忘记密码重置
+ *
+ * 前端传 { code, password, place, flag }
+ * 用 getCodeForForgetPassword 发的验证码（purpose='reset'）。
+ * 之前同样没实现。
+ */
+user.post('/updateForForgetPassword', async (c) => {
+  const b = await readBody(c)
+  const code = String(b.code || '').trim()
+  const place = String(b.place || '').trim().toLowerCase()
+  const rawPwd = String(b.password || '')
+
+  if (!code) return legacyErr('请输入验证码', 400)
+  if (!place) return legacyErr('请输入邮箱', 400)
+  if (!rawPwd) return legacyErr('请输入新密码', 400)
+
+  const plain = await aesEcbDecrypt(rawPwd)
+  if (plain === null) return legacyErr('密码格式错误', 400)
+  if (plain.length < 6) return legacyErr('密码至少 6 位', 400)
+
+  const check = await consumeCode(c.env.DB, place, code, 'reset')
+  if (!check.ok) return legacyErr(check.reason || '验证码错误', 400)
+
+  const user = await c.env.DB
+    .prepare(`SELECT id FROM users WHERE email=?1`)
+    .bind(place).first<{ id: number }>()
+  if (!user) return legacyErr('该邮箱未注册', 404)
+
+  const hash = await hashPassword(plain)
+  await c.env.DB.prepare(`UPDATE users SET password_hash=?1 WHERE id=?2`).bind(hash, user.id).run()
+  // 改密后清掉所有会话，强制重新登录
+  await c.env.DB.prepare(`DELETE FROM sessions WHERE user_id=?1`).bind(user.id).run()
+
+  return legacyOk({ updated: true })
 })
 
 /** 其余 user/* 占位 */
